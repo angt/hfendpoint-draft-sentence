@@ -1,0 +1,3 @@
+hfendpoint @ git+https://github.com/angt/hfendpoint-draft@v0.1.0#subdirectory=bindings/python
+sentence-transformers
+torch
