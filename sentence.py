@@ -1,8 +1,9 @@
 import hfendpoint
 import torch
 from sentence_transformers import SentenceTransformer
+import os
 
-model_name = 'all-MiniLM-L6-v2'
+model_name = os.getenv('MODEL_ID')
 device = torch.device("mps") if torch.backends.mps.is_available() and torch.backends.mps.is_built() else torch.device("cpu")
 model = SentenceTransformer(model_name, device=device)
 tokenizer = model.tokenizer
