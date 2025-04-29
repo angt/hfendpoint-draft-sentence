@@ -8,13 +8,20 @@ device = torch.device("mps") if torch.backends.mps.is_available() and torch.back
 model = SentenceTransformer(model_name, device=device)
 tokenizer = model.tokenizer
 
-print(f"Model {model_name} loaded on {device}")
+encode_batch_size = int(os.getenv('HFENDPOINT_BATCH_SIZE', '32'))
+n_threads = torch.get_num_threads()
+
+print(f"Model {model_name} loaded on {device}, {n_threads} thread(s)")
 
 def embeddings_handler(request_data, send_chunk):
     try:
         texts = request_data["input"]
         tokens = sum(len(tokenizer.encode(t, add_special_tokens=True)) for t in texts)
-        embeddings = model.encode(texts)
+        embeddings = model.encode(
+            texts,
+            batch_size=encode_batch_size,
+            device=device.type
+        )
         send_chunk({
             'embeddings': [emb.tolist() for emb in embeddings],
             'usage': {
