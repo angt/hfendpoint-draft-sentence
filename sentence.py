@@ -3,6 +3,19 @@ import torch
 from sentence_transformers import SentenceTransformer
 import os
 
+try:
+    # ugly hack to hide stupid warnings
+    stderr = os.dup(2)
+    os.dup2(os.open(os.devnull, os.O_RDWR), 2)
+    import intel_extension_for_pytorch as ipex
+    IPEX_AVAILABLE = True
+except ImportError:
+    IPEX_AVAILABLE = False
+finally:
+    if stderr != -1:
+        os.dup2(stderr, 2)
+        os.close(stderr)
+
 model_name = os.getenv('MODEL_ID')
 
 if torch.backends.mps.is_available() and torch.backends.mps.is_built():
@@ -14,6 +27,14 @@ else:
 
 model = SentenceTransformer(model_name, device=device.type)
 model.eval()
+
+if IPEX_AVAILABLE and device.type == 'cpu':
+    try:
+        model = ipex.optimize(model, dtype=torch.bfloat16)
+        print("IPEX optimization enabled")
+    except Exception as e:
+        print(f"IPEX optimization failed: {e}")
+        IPEX_AVAILABLE = False
 
 tokenizer = model.tokenizer
 max_length = model.get_max_seq_length()
@@ -47,7 +68,7 @@ def embeddings(request, send_chunk):
                 features_on_device[k] = v
 
         with torch.no_grad():
-            if device.type == 'cpu':
+            if device.type == 'cpu' and not IPEX_AVAILABLE:
                 with torch.autocast(device_type="cpu", dtype=torch.bfloat16, enabled=True):
                     output_features = model(features_on_device)
             else:
