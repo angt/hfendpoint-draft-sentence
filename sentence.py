@@ -47,20 +47,31 @@ n_threads = torch.get_num_threads()
 
 print(f"Model {model_name} loaded on {device}, {n_threads} thread(s)")
 
-def embeddings(request, send_chunk):
+def tokenize(request, send_chunk):
     try:
         features = tokenizer(
             request["input"],
             add_special_tokens=True,
-            padding='longest',
+            padding=False,
             truncation=True,
             max_length=max_length,
-            return_attention_mask=True, # for total_tokens
-            return_tensors='pt'
         )
-        total_tokens = features['attention_mask'].sum().item()
+        send_chunk({
+            "tokens": features['input_ids']
+        })
+    except Exception as e:
+        print(f"Error in tokenize: {e}")
 
+def embeddings(request, send_chunk):
+    try:
+        features = tokenizer.pad(
+            {'input_ids': request["input"]},
+            padding='longest',
+            return_tensors='pt',
+            return_attention_mask=True
+        )
         features_on_device = {}
+
         for k, v in features.items():
             if torch.is_tensor(v):
                 features_on_device[k] = v.to(device)
@@ -78,17 +89,13 @@ def embeddings(request, send_chunk):
             embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
 
         send_chunk({
-            'embeddings': embeddings.cpu().tolist(),
-            'usage': {
-                'prompt_tokens': total_tokens,
-                'total_tokens': total_tokens
-            },
-            'model': model_name
+            'embeddings': embeddings.cpu().tolist()
         })
     except Exception as e:
         print(f"Error in embeddings: {e}")
 
 if __name__ == "__main__":
     hfendpoint.run({
+        "tokenize": tokenize,
         "embeddings": embeddings,
     })
